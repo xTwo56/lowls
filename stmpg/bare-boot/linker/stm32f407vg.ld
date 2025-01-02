@@ -1,7 +1,7 @@
-// ELF entrypoint
+/* ELF entrypoint */
 ENTRY(Reset_Handler)
 
-// address are not arbitrary, follows STM32F407VG memory map
+/* address are not arbitrary, follows STM32F407VG memory map */
 MEMORY
 {
     FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 1M
