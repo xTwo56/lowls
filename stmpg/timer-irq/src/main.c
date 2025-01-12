@@ -46,13 +46,26 @@ enum {
 };
 
 /*
- * Divide the 16 MHz timer clock by 16,000 to obtain a 1 kHz counter.
- * Five hundred counter periods then produce one interrupt every 500 ms.
+ * Divide TIM2's 16 MHz input into a 1 MHz counter.
+ * One thousand counter increments produce a 1 ms interrupt.
  */
 enum {
-  TIM2_PRESCALER_VALUE = 16000u - 1u,
-  TIM2_RELOAD_VALUE = 500u - 1u,
+  TIM2_INPUT_CLOCK_HZ = 16000000u,
+  TIM2_COUNTER_HZ = 1000000u,
+  TIM2_INTERRUPT_HZ = 1000u,
+
+  TIM2_PRESCALER_VALUE = (TIM2_INPUT_CLOCK_HZ / TIM2_COUNTER_HZ) - 1u,
+
+  TIM2_RELOAD_VALUE = (TIM2_COUNTER_HZ / TIM2_INTERRUPT_HZ) - 1u,
+
+  LED_TOGGLE_INTERVAL_TICKS = 500u,
 };
+
+/*
+ * The ISR writes this counter while the foreground code reads it.
+ * Reset_Handler clears its .bss storage before entering C.
+ */
+static volatile uint32_t timer_ticks;
 
 /* Convert a memory-mapped address into a volatile register pointer. */
 static inline volatile uint32_t *register_at(uintptr_t address) {
@@ -72,17 +85,15 @@ static void configure_green_led(void) {
   *gpiod_moder = mode;
 }
 
-/* Handle one TIM2 update event and toggle the green LED. */
+/* Record one elapsed millisecond and return promptly. */
 void TIM2_IRQHandler(void) {
   volatile uint32_t *const tim2_status = register_at(TIM2_SR_ADDRESS);
 
-  volatile uint32_t *const gpiod_output = register_at(GPIOD_ODR_ADDRESS);
-
   if ((*tim2_status & TIM2_UPDATE_FLAG) != 0u) {
-    /* Clear the handled event so it does not immediately interrupt again. */
-    *tim2_status &= ~TIM2_UPDATE_FLAG;
+    /* Acknowledge the event before leaving the handler. */
+    *tim2_status = 0u;
 
-    *gpiod_output ^= GREEN_LED_MASK;
+    timer_ticks++;
   }
 }
 
@@ -142,8 +153,21 @@ void firmware_main(void) {
   /* Start TIM2 after its interrupt route is ready. */
   *tim2_control = TIM2_COUNTER_ENABLE;
 
+  uint32_t last_toggle_tick = timer_ticks;
+
   for (;;) {
-    /* Suspend instruction execution until an interrupt arrives. */
+    /* Sleep until TIM2 or another enabled interrupt wakes the CPU. */
     __asm__ volatile("wfi");
+
+    const uint32_t current_tick = timer_ticks;
+
+    /*
+     * Unsigned subtraction remains valid when timer_ticks eventually
+     * wraps from UINT32_MAX back to zero.
+     */
+    if ((current_tick - last_toggle_tick) >= LED_TOGGLE_INTERVAL_TICKS) {
+      last_toggle_tick += LED_TOGGLE_INTERVAL_TICKS;
+      *gpiod_output ^= GREEN_LED_MASK;
+    }
   }
 }
