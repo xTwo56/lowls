@@ -2,6 +2,11 @@
 .cpu cortex-m4
 .thumb
 
+/* These symbols are defined outside this assembly file. */
+.extern _estack
+.extern Reset_Handler
+
+/* Store the initial stack pointer and reset-handler address in Flash. */
 .section .isr_vector, "a", %progbits
 .align 2
 
@@ -13,15 +18,3 @@ vector_table:
     .word Reset_Handler
 
 .size vector_table, . - vector_table
-
-.section .text.Reset_Handler, "ax", %progbits
-.align 2
-
-.global Reset_Handler
-.type Reset_Handler, %function
-.thumb_func
-
-Reset_Handler:
-    b .
-
-.size Reset_Handler, . - Reset_Handler

@@ -1,0 +1,14 @@
+:name: LowLS GPIO Controller
+:description: Runs the GPIO controller on an STM32F4 Discovery simulation.
+
+using sysbus
+
+# Locate the ELF relative to this script's directory.
+$elf?=$ORIGIN/../../../../build/gpio-ctrlr/gpio_controller.elf
+
+# Create an STM32F4 Discovery machine.
+mach create
+machine LoadPlatformDescription @platforms/boards/stm32f4_discovery-kit.repl
+
+# Load the firmware into the simulated MCU.
+sysbus LoadELF $elf

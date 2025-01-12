@@ -1,21 +1,29 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 
-# Build a freestanding C++20 and assembly firmware image.
-project(bare_boot LANGUAGES CXX ASM)
+# Build freestanding STM32 firmware with ISO C23 and ARM assembly.
+project(bare_boot LANGUAGES C ASM)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
 
+# Locate hardware support shared by all STM32F407 projects.
 set(
-    LINKER_SCRIPT
-    ${CMAKE_CURRENT_SOURCE_DIR}/linker/stm32f407vg.ld
+    STM32F407_DIR
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../platform/stm32f407
 )
 
-# The initial firmware contains only the vector table and reset handler.
+# All current projects use the STM32F407VG memory layout.
+set(
+    LINKER_SCRIPT
+    ${STM32F407_DIR}/linker/stm32f407vg.ld
+)
+
+# Combine shared STM32 startup data with project-specific reset behaviour.
 add_executable(
     bare_boot
-    startup/vector_table.S
+    ${STM32F407_DIR}/startup/vector_table.S
+    startup/reset_handler.S
 )
 
 set_target_properties(
@@ -35,16 +43,13 @@ target_compile_options(
         -mcpu=cortex-m4
         -mthumb
 
-        # Apply C++-specific options only when C++ sources are introduced.
-        $<$<COMPILE_LANGUAGE:CXX>:-ffreestanding>
-        $<$<COMPILE_LANGUAGE:CXX>:-ffunction-sections>
-        $<$<COMPILE_LANGUAGE:CXX>:-fdata-sections>
-        $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
-        $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
-        $<$<COMPILE_LANGUAGE:CXX>:-fno-threadsafe-statics>
-        $<$<COMPILE_LANGUAGE:CXX>:-Wall>
-        $<$<COMPILE_LANGUAGE:CXX>:-Wextra>
-        $<$<COMPILE_LANGUAGE:CXX>:-Wpedantic>
+        # Apply freestanding C diagnostics only to C source files.
+        $<$<COMPILE_LANGUAGE:C>:-ffreestanding>
+        $<$<COMPILE_LANGUAGE:C>:-ffunction-sections>
+        $<$<COMPILE_LANGUAGE:C>:-fdata-sections>
+        $<$<COMPILE_LANGUAGE:C>:-Wall>
+        $<$<COMPILE_LANGUAGE:C>:-Wextra>
+        $<$<COMPILE_LANGUAGE:C>:-Wpedantic>
 )
 
 target_link_options(
