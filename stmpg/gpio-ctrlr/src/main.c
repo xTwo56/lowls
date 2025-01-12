@@ -95,7 +95,7 @@ static void wait_for_systick(volatile uint32_t *control) {
   }
 }
 
-/* Continuously drive the LED from the user-button state. */
+/* Toggle the LED after each debounced button press. */
 [[noreturn]]
 void firmware_main(void) {
   volatile uint32_t *const rcc_ahb1enr = register_at(RCC_AHB1ENR_ADDRESS);
@@ -122,13 +122,7 @@ void firmware_main(void) {
   configure_pin_mode(&gpioa->moder, USER_BUTTON_PIN, GPIO_INPUT_MODE);
   configure_pin_mode(&gpiod->moder, GREEN_LED_PIN, GPIO_OUTPUT_MODE);
 
-  const uint32_t sampled_button_state =
-      ((gpioa->idr & (1u << USER_BUTTON_PIN)) != 0u);
-
-  gpiod->bsrr = 1u << GREEN_LED_PIN;
-
   /* Begin with both the remembered button state and LED turned off. */
-  uint32_t button_was_pressed = 0u;
   uint32_t led_is_on = 0u;
 
   uint32_t candidate_button_state = 0u;

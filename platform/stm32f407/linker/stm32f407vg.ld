@@ -1,31 +1,31 @@
-/* ELF entrypoint */
-ENTRY(Reset_Handler)
-
-/* address are not arbitrary, follows STM32F407VG memory map */
-MEMORY
-{
-    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 1M
-    RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 128K
-}
-
-_estack = ORIGIN(RAM) + LENGTH(RAM);
-
-SECTIONS
-{
-    .isr_vector :
+    /*
+     * Writable initialized objects execute from SRAM, while their initial
+     * values are stored in the firmware image in Flash.
+     */
+    .data :
     {
         . = ALIGN(4);
-        KEEP(*(.isr_vector))
+        _sdata = .;
+        *(.data)
+        *(.data.*)
         . = ALIGN(4);
-    } > FLASH
+        _edata = .;
+    } > SRAM AT > FLASH
 
-    .text :
+    /* Address in Flash from which Reset_Handler copies .data. */
+    _sidata = LOADADDR(.data);
+
+    /*
+     * Zero-initialized objects occupy SRAM but require no stored bytes
+     * in the firmware image.
+     */
+    .bss (NOLOAD) :
     {
         . = ALIGN(4);
-        *(.text)
-        *(.text.*)
-        *(.rodata)
-        *(.rodata.*)
+        _sbss = .;
+        *(.bss)
+        *(.bss.*)
+        *(COMMON)
         . = ALIGN(4);
-    } > FLASH
-}
+        _ebss = .;
+    } > SRAM

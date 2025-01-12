@@ -1,0 +1,18 @@
+:name: LowLS TIM2 Interrupt
+:description: Runs an interrupt-driven LED timer on STM32F4 Discovery.
+
+using sysbus
+
+# Locate the firmware relative to this script.
+$elf?=$ORIGIN/../../../../build/timer-irq/timer_irq.elf
+
+# Create the simulated STM32F4 Discovery board.
+mach create
+machine LoadPlatformDescription @platforms/boards/stm32f4_discovery-kit.repl
+
+# Match TIM2's model clock to the firmware's 16 MHz assumption.
+sysbus.timer2 Frequency 16000000
+
+sysbus LoadELF $elf
+# Load the ELF and its symbols into the simulated machine.
+sysbus LoadELF $elf
