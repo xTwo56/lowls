@@ -15,12 +15,17 @@ typedef struct {
   volatile uint32_t afrh;      /* Offset 0x24: pins 8–15 functions. */
 } gpio_registers;
 
-/* Catch accidental struct-layout changes during compilation. */
-static_assert(offsetof(gpio_registers, idr) == 0x10u);
-static_assert(offsetof(gpio_registers, bsrr) == 0x18u);
+/* Verify that struct members match the hardware register offsets. */
+_Static_assert(offsetof(gpio_registers, idr) == 0x10u,
+               "GPIO IDR must be at offset 0x10");
+
+_Static_assert(offsetof(gpio_registers, bsrr) == 0x18u,
+               "GPIO BSRR must be at offset 0x18");
 
 /* STM32F407 memory-mapped peripheral registers. */
 enum {
+  RCC_AHB1ENR_ADDRESS = 0x40023830u,
+
   GPIOA_BASE_ADDRESS = 0x40020000u,
   GPIOD_BASE_ADDRESS = 0x40020C00u,
 
@@ -95,19 +100,17 @@ static void wait_for_systick(volatile uint32_t *control) {
 void firmware_main(void) {
   volatile uint32_t *const rcc_ahb1enr = register_at(RCC_AHB1ENR_ADDRESS);
 
-  volatile uint32_t *const gpioa_moder = register_at(GPIOA_MODER_ADDRESS);
-
-  volatile uint32_t *const gpioa_idr = register_at(GPIOA_IDR_ADDRESS);
-
-  volatile uint32_t *const gpiod_moder = register_at(GPIOD_MODER_ADDRESS);
-
-  volatile uint32_t *const gpiod_bsrr = register_at(GPIOD_BSRR_ADDRESS);
-
   volatile uint32_t *const systick_control = register_at(SYSTICK_CTRL_ADDRESS);
 
   volatile uint32_t *const systick_load = register_at(SYSTICK_LOAD_ADDRESS);
 
   volatile uint32_t *const systick_value = register_at(SYSTICK_VAL_ADDRESS);
+
+  volatile gpio_registers *const gpioa =
+      (volatile gpio_registers *)GPIOA_BASE_ADDRESS;
+
+  volatile gpio_registers *const gpiod =
+      (volatile gpio_registers *)GPIOD_BASE_ADDRESS;
 
   /* Enable both GPIO peripheral clocks without changing other clocks. */
   *rcc_ahb1enr |= GPIOA_CLOCK_ENABLE | GPIOD_CLOCK_ENABLE;
@@ -116,8 +119,13 @@ void firmware_main(void) {
   const uint32_t enabled_clocks = *rcc_ahb1enr;
   (void)enabled_clocks;
 
-  configure_pin_mode(gpioa_moder, USER_BUTTON_PIN, GPIO_INPUT_MODE);
-  configure_pin_mode(gpiod_moder, GREEN_LED_PIN, GPIO_OUTPUT_MODE);
+  configure_pin_mode(&gpioa->moder, USER_BUTTON_PIN, GPIO_INPUT_MODE);
+  configure_pin_mode(&gpiod->moder, GREEN_LED_PIN, GPIO_OUTPUT_MODE);
+
+  const uint32_t sampled_button_state =
+      ((gpioa->idr & (1u << USER_BUTTON_PIN)) != 0u);
+
+  gpiod->bsrr = 1u << GREEN_LED_PIN;
 
   /* Begin with both the remembered button state and LED turned off. */
   uint32_t button_was_pressed = 0u;
@@ -128,7 +136,7 @@ void firmware_main(void) {
   uint32_t stable_samples = 0u;
 
   /* Begin with the green LED off. */
-  *gpiod_bsrr = 1u << (GREEN_LED_PIN + BSRR_RESET_OFFSET);
+  gpiod->bsrr = 1u << (GREEN_LED_PIN + BSRR_RESET_OFFSET);
 
   start_systick(systick_control, systick_load, systick_value);
 
@@ -137,7 +145,7 @@ void firmware_main(void) {
 
     /* Normalize PA0 into either zero or one. */
     const uint32_t sampled_button_state =
-        ((*gpioa_idr & (1u << USER_BUTTON_PIN)) != 0u);
+        ((gpioa->idr & (1u << USER_BUTTON_PIN)) != 0u);
 
     if (sampled_button_state != candidate_button_state) {
       /* A changed sample begins a new stability period. */
@@ -156,9 +164,9 @@ void firmware_main(void) {
         led_is_on ^= 1u;
 
         if (led_is_on != 0u) {
-          *gpiod_bsrr = 1u << GREEN_LED_PIN;
+          gpiod->bsrr = 1u << GREEN_LED_PIN;
         } else {
-          *gpiod_bsrr = 1u << (GREEN_LED_PIN + BSRR_RESET_OFFSET);
+          gpiod->bsrr = 1u << (GREEN_LED_PIN + BSRR_RESET_OFFSET);
         }
       }
     }
